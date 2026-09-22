@@ -64,9 +64,10 @@ async def update_my_profile(
                 user_id,
                 cleanup_err,
             )
+        logger.exception("Erro ao atualizar usuário no banco de dados")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao atualizar usuário no banco de dados: {e!s}",
+            detail="Erro ao atualizar usuário no banco de dados.",
         ) from e
 
     return CurrentUserProfileResponse(

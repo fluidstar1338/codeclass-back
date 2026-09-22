@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.api import api_router
 from app.core.config import settings
+from app.exceptions import register_exception_handlers
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -10,6 +11,8 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+register_exception_handlers(app)
 
 # CORS Middleware
 if settings.CORS_ORIGINS:

@@ -128,9 +128,10 @@ async def register_organization(
             await auth_service.delete_auth_user(user_id)
         except AuthError as cleanup_err:
             logger.warning("Falha ao remover usuário do provedor no rollback: %s", cleanup_err)
+        logger.exception("Erro ao cadastrar organização")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao cadastrar organização: {e!s}",
+            detail="Erro ao cadastrar organização.",
         ) from e
 
 
@@ -138,14 +139,13 @@ async def register_organization(
     "/{org_id}",
     response_model=OrganizationResponse,
     summary="Consulta dados cadastrais da organização",
+    dependencies=[Depends(verify_org_access)],
 )
 async def get_organization(
     org_id: UUID,
     current_member: Annotated[OrganizationMember, Depends(get_current_active_member)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> OrganizationResponse:
-    await verify_org_access(org_id, current_member)
-
     res = await db.execute(select(Organization).where(Organization.id == org_id))
     org = res.scalar_one_or_none()
     if org is None:
@@ -160,6 +160,7 @@ async def get_organization(
     "/{org_id}",
     response_model=OrganizationResponse,
     summary="Atualiza dados cadastrais da organização (Apenas Owner)",
+    dependencies=[Depends(verify_org_access)],
 )
 async def update_organization(
     org_id: UUID,
@@ -167,8 +168,6 @@ async def update_organization(
     current_member: Annotated[OrganizationMember, Depends(require_owner)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> OrganizationResponse:
-    await verify_org_access(org_id, current_member)
-
     res = await db.execute(select(Organization).where(Organization.id == org_id))
     org = res.scalar_one_or_none()
     if org is None:
@@ -209,14 +208,13 @@ async def update_organization(
     "/{org_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Exclui definitivamente a organização (Apenas Owner)",
+    dependencies=[Depends(verify_org_access)],
 )
 async def delete_organization(
     org_id: UUID,
     current_member: Annotated[OrganizationMember, Depends(require_owner)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
-    await verify_org_access(org_id, current_member)
-
     res = await db.execute(select(Organization).where(Organization.id == org_id))
     org = res.scalar_one_or_none()
     if org is None:
@@ -261,6 +259,7 @@ async def delete_organization(
     response_model=OrganizationMemberResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Cadastra novo membro institucional na organização",
+    dependencies=[Depends(verify_org_access)],
 )
 async def add_member(
     org_id: UUID,
@@ -268,8 +267,6 @@ async def add_member(
     current_member: Annotated[OrganizationMember, Depends(require_admin_or_owner)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> OrganizationMemberResponse:
-    await verify_org_access(org_id, current_member)
-
     # Não permite criar outro Owner diretamente
     if request.role == OrgRole.OWNER:
         raise HTTPException(
@@ -350,9 +347,10 @@ async def add_member(
             await auth_service.delete_auth_user(user_id)
         except AuthError as cleanup_err:
             logger.warning("Falha ao remover usuário do provedor no rollback de membro: %s", cleanup_err)
+        logger.exception("Erro ao cadastrar membro")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao cadastrar membro: {e!s}",
+            detail="Erro ao cadastrar membro.",
         ) from e
 
 
@@ -360,6 +358,7 @@ async def add_member(
     "/{org_id}/members",
     response_model=list[OrganizationMemberResponse],
     summary="Lista todos os membros vinculados à instituição",
+    dependencies=[Depends(verify_org_access)],
 )
 async def list_members(
     org_id: UUID,
@@ -371,8 +370,6 @@ async def list_members(
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> list[OrganizationMemberResponse]:
-    await verify_org_access(org_id, current_member)
-
     stmt = (
         select(OrganizationMember)
         .options(selectinload(OrganizationMember.user))
@@ -414,6 +411,7 @@ async def list_members(
     "/{org_id}/members/{user_id}/role",
     response_model=OrganizationMemberResponse,
     summary="Atualiza o papel institucional do membro",
+    dependencies=[Depends(verify_org_access)],
 )
 async def update_member_role(
     org_id: UUID,
@@ -422,8 +420,6 @@ async def update_member_role(
     current_member: Annotated[OrganizationMember, Depends(require_admin_or_owner)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> OrganizationMemberResponse:
-    await verify_org_access(org_id, current_member)
-
     if request.role == OrgRole.OWNER:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -485,6 +481,7 @@ async def update_member_role(
     "/{org_id}/members/{user_id}/status",
     response_model=OrganizationMemberResponse,
     summary="Ativa ou desativa o acesso do membro na organização",
+    dependencies=[Depends(verify_org_access)],
 )
 async def update_member_status(
     org_id: UUID,
@@ -493,8 +490,6 @@ async def update_member_status(
     current_member: Annotated[OrganizationMember, Depends(require_admin_or_owner)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> OrganizationMemberResponse:
-    await verify_org_access(org_id, current_member)
-
     if current_member.user_id == user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -550,6 +545,7 @@ async def update_member_status(
     "/{org_id}/owner",
     response_model=OrganizationResponse,
     summary="Transfere a titularidade da instituição para outro membro (Apenas Owner)",
+    dependencies=[Depends(verify_org_access)],
 )
 async def transfer_ownership(
     org_id: UUID,
@@ -557,8 +553,6 @@ async def transfer_ownership(
     current_member: Annotated[OrganizationMember, Depends(require_owner)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> OrganizationResponse:
-    await verify_org_access(org_id, current_member)
-
     if request.new_owner_id == current_member.user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -612,14 +606,13 @@ async def transfer_ownership(
     "/{org_id}/classrooms",
     response_model=list[ClassroomSummaryResponse],
     summary="Lista todas as turmas da instituição para auditoria e supervisão (Admin, Owner)",
+    dependencies=[Depends(verify_org_access)],
 )
 async def list_organization_classrooms(
     org_id: UUID,
     current_member: Annotated[OrganizationMember, Depends(require_admin_or_owner)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[ClassroomSummaryResponse]:
-    await verify_org_access(org_id, current_member)
-
     stmt = (
         select(Classroom)
         .where(Classroom.organization_id == org_id)
